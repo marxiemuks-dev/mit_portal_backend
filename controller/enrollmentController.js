@@ -396,11 +396,51 @@ const getEnrollmentById = async (req, res) => {
   }
 
 };
+const deleteEnrollment = async (req, res) => {
+  try {
+    const { id } = req.params; // enrollment ID from URL parameter
+
+    if (!id) {
+      return res.status(400).json({
+        status: "error",
+        message: "Enrollment ID is required",
+      });
+    }
+
+    const { data, error } = await supabase
+      .from("studentEnrollment")
+      .delete()
+      .eq("id", id)
+      .select("*");
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Enrollment not found",
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "Enrollment deleted successfully",
+      deletedEnrollment: data[0],
+    });
+  } catch (err) {
+    console.error("Error deleting enrollment:", err.message);
+    res.status(500).json({
+      status: "error",
+      message: "Internal Server Error",
+    });
+  }
+};
 
 module.exports = {
   enrollStudent,
   getAllEnrollments,
   updateEnrollment,
   getEnrollmentsBySemesterAndYear,
-  getEnrollmentById
+  getEnrollmentById,
+  deleteEnrollment
 }

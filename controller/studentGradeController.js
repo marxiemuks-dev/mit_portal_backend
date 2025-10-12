@@ -12,7 +12,6 @@ const addStudentGrade = async (req, res) => {
         message: "student_id and subject_schedule_id are required",
       });
     }
-
     const { data, error } = await supabase
       .from("student_grade")
       .insert([
@@ -26,9 +25,7 @@ const addStudentGrade = async (req, res) => {
         },
       ])
       .select("*");
-
     if (error) throw error;
-
     res.status(201).json({
       status: "success",
       message: "Student grade added successfully",

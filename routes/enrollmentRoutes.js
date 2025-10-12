@@ -17,4 +17,5 @@ module.exports = function(app){
   app.get('/api/auth/enrollment/filter', enrollmentController.getEnrollmentsBySemesterAndYear);
   app.put('/api/auth/enrollment', enrollmentController.updateEnrollment);
   app.get('/api/auth/enrollment/:student_id', enrollmentController.getEnrollmentById);
+  app.delete('/api/auth/enrollment/:id', enrollmentController.deleteEnrollment);
 }
