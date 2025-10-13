@@ -1,8 +1,193 @@
 const supabase = require("../config/supabaseClient");
+const nodemailer = require('nodemailer');
 
+
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: {
+      user: 'mitportalsystem@gmail.com', // Use environment variables for sensitive data
+      pass: 'roln chmn dyju mncm',
+    },
+  });
+  // Utility function to send email
+  const sendEmail = async (to, subject, text) => {
+    const mailOptions = {
+      from: 'mitportalsystem@gmail.com',
+      to,
+      subject,
+      text,
+    };
+  
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      console.log('Email sent:', info.response);
+      return true
+
+    } catch (error) {
+      console.error('Error sending email:', error.message);
+      return false
+    }
+  };
 /**
  * 🟢 Add new calendar event
  */
+// const addCalendarEvent = async (req, res) => {
+//   try {
+//     const {
+//       title,
+//       description,
+//       event_type,
+//       start_date,
+//       end_date,
+//       semester,
+//       school_year,
+//       status,
+//       visibility,
+//       created_by,
+//     } = req.body;
+
+//     // ✅ Validation
+//     if (!title || !event_type || !start_date || !semester || !school_year) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Required fields are missing",
+//       });
+//     }
+
+//     // ✅ Insert event
+//     const { data, error } = await supabase
+//       .from("school_calendar")
+//       .insert([
+//         {
+//           title,
+//           description,
+//           event_type,
+//           start_date,
+//           end_date,
+//           semester,
+//           school_year,
+//           status,
+//           visibility,
+//           created_by,
+//         },
+//       ])
+//       .select("*");
+
+//     if (error) throw error;
+
+//     res.status(201).json({
+//       status: true,
+//       message: "Calendar event added successfully",
+//       data: data[0],
+//     });
+//   } catch (err) {
+//     console.error("Error adding calendar event:", err.message);
+//     res.status(500).json({
+//       status: "error",
+//       message: "Internal Server Error",
+//       data: [],
+//     });
+//   }
+// };
+// const addCalendarEvent = async (req, res) => {
+//   try {
+//     const {
+//       title,
+//       description,
+//       event_type,
+//       start_date,
+//       end_date,
+//       semester,
+//       school_year,
+//       status,
+//       visibility,
+//       created_by,
+//     } = req.body;
+
+//     // ✅ Validate required fields
+//     if (!title || !event_type || !start_date || !semester || !school_year) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Required fields are missing",
+//       });
+//     }
+
+//     // ✅ Insert the event
+//     const { data, error } = await supabase
+//       .from("school_calendar")
+//       .insert([
+//         {
+//           title,
+//           description,
+//           event_type,
+//           start_date,
+//           end_date,
+//           semester,
+//           school_year,
+//           status,
+//           visibility,
+//           created_by,
+//         },
+//       ])
+//       .select("*");
+
+//     if (error) throw error;
+//     const event = data[0];
+
+//     // ✅ If visibility is Public or Student → send emails
+//     if (visibility === "Public" || visibility === "Student") {
+//       const { data: students, error: studentError } = await supabase
+//         .from("students")
+//         .select("student_email, first_name, last_name")
+//         .order("created_at", { ascending: false });
+
+//       if (studentError) throw studentError;
+
+//       if (students && students.length > 0) {
+//         console.log(`📢 Sending event email to ${students.length} students...`);
+
+//         const subject = `New School Event: ${title}`;
+//         const message = `
+//         Dear Student,
+
+//         You are updated for a new school event!
+
+//         📅 Event: ${title}
+//         📝 Description: ${description || "No description provided."}
+//         📚 Type: ${event_type}
+//         📆 Date: ${start_date} ${end_date ? ` - ${end_date}` : ""}
+//         🎓 School Year: ${school_year}
+//         🏫 Semester: ${semester}
+
+//         Thank you,
+//         MIT Portal System
+//         `;
+
+//         // Send emails asynchronously (one by one)
+//         for (const student of students) {
+//           if (student.student_email) {
+//             await sendEmail(student.student_email, subject, message);
+//           }
+//         }
+//       }
+//     }
+
+//     res.status(201).json({
+//       status: true,
+//       message: "Calendar event added successfully",
+//       data: event,
+//     });
+//   } catch (err) {
+//     console.error("❌ Error adding calendar event:", err.message);
+//     res.status(500).json({
+//       status: "error",
+//       message: "Internal Server Error",
+//     });
+//   }
+// };
 const addCalendarEvent = async (req, res) => {
   try {
     const {
@@ -18,7 +203,7 @@ const addCalendarEvent = async (req, res) => {
       created_by,
     } = req.body;
 
-    // ✅ Validation
+    // ✅ Validate required fields
     if (!title || !event_type || !start_date || !semester || !school_year) {
       return res.status(400).json({
         status: "error",
@@ -26,7 +211,7 @@ const addCalendarEvent = async (req, res) => {
       });
     }
 
-    // ✅ Insert event
+    // ✅ Insert the event
     const { data, error } = await supabase
       .from("school_calendar")
       .insert([
@@ -46,21 +231,87 @@ const addCalendarEvent = async (req, res) => {
       .select("*");
 
     if (error) throw error;
+    const event = data[0];
+
+    // ✅ Email to all students if visibility is "Public" or "Student"
+    if (visibility === "Public" || visibility === "Student") {
+      const { data: students, error: studentError } = await supabase
+        .from("students")
+        .select("student_email, first_name, last_name")
+        .order("created_at", { ascending: false });
+
+      if (studentError) throw studentError;
+
+      if (students && students.length > 0) {
+        console.log(`📢 Sending event email to ${students.length} students...`);
+
+        const subject = `New School Event: ${title}`;
+        const message = `
+Dear Student,
+
+You are updated for a new school event!
+
+📅 Event: ${title}
+📝 Description: ${description || "No description provided."}
+📚 Type: ${event_type}
+📆 Date: ${start_date}${end_date ? ` - ${end_date}` : ""}
+🎓 School Year: ${school_year}
+🏫 Semester: ${semester}
+
+Thank you,
+MIT Portal System
+`;
+
+        // Send emails asynchronously (in sequence)
+        for (const student of students) {
+          if (student.student_email) {
+            await sendEmail(student.student_email, subject, message);
+          }
+        }
+      }
+    }
+
+    // ✅ Insert notification if visibility is Public / Faculty / Admin Only
+    if (["Public", "Faculty", "Admin Only"].includes(visibility)) {
+      const message = `New calendar event: ${title} - ${event_type}`;
+      const target_type =
+        visibility === "Public"
+          ? "ALL"
+          : visibility === "Faculty"
+          ? "FACULTY"
+          : "ADMIN";
+
+      const { data: notifData, error: notifError } = await supabase
+        .from("notification")
+        .insert([
+          {
+            title,
+            message,
+            target_type, // 'ALL', 'FACULTY', 'ADMIN'
+            target_user_id: null,
+            is_read: false,
+          },
+        ])
+        .select("*");
+
+      if (notifError) throw notifError;
+      console.log("🔔 Notification added:", notifData);
+    }
 
     res.status(201).json({
       status: true,
       message: "Calendar event added successfully",
-      data: data[0],
+      data: event,
     });
   } catch (err) {
-    console.error("Error adding calendar event:", err.message);
+    console.error("❌ Error adding calendar event:", err.message);
     res.status(500).json({
       status: "error",
       message: "Internal Server Error",
-      data: [],
     });
   }
 };
+
 
 /**
  * 📦 Get all calendar events with creator info

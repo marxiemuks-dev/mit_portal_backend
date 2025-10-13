@@ -16,5 +16,6 @@ module.exports = function(app){
   app.get('/api/auth/grade/:subject_schedule_id', studentGradeController.getStudentGradesBySchedule);
   app.put("/api/auth/grade/:id", studentGradeController.updateStudentGrade);
   app.get("/api/auth/grade/student/:student_id", studentGradeController.getStudentGradesByStudentId);
+  app.get("/api/auth/grade/grade-evaluation/:student_id", studentGradeController.getStudentGradeEvaluation);
 
 }

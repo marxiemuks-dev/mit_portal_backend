@@ -13,7 +13,9 @@ const addSchedule = async (req, res) => {
       time,
       day,
       room,
-      instructor
+      instructor,
+      yearLevel,
+      section
     } = req.body;
 
     // Validate
@@ -36,7 +38,9 @@ const addSchedule = async (req, res) => {
           time,
           day,
           room,
-          instructor
+          instructor,
+          year_level: yearLevel,
+          section
         },
       ])
       .select("*");
@@ -76,6 +80,8 @@ const getSchedules = async (req, res) => {
         school_year,
         semester,
         instructor,
+        section,
+        year_level,
         instructor:users (
           id,
           first_name,
@@ -121,7 +127,9 @@ const updateSchedule = async (req, res) => {
       time,
       day,
       room,
-      instructor
+      instructor,
+      yearLevel,
+      section
     } = req.body;
 
     // Validate required fields
@@ -144,7 +152,9 @@ const updateSchedule = async (req, res) => {
         time,
         day,
         room,
-        instructor
+        instructor,
+        year_level:yearLevel,
+        section
       })
       .eq("schedule_id", id)
       .select("*");

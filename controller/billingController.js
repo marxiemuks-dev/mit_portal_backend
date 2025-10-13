@@ -45,9 +45,15 @@ const getAllBillings = async (req, res) => {
         total_bill,
         current_bill,
         full_payment,
+        total_payment,
+        total_unit,
+        tuition_fee,
+        total_misc_other_fee,
+        scholarship_status,
         created_at,
         semester,
         school_year,
+        studentID,
         studentEnrollment:studentEnrollment (
           id,
           current_course,
@@ -60,14 +66,13 @@ const getAllBillings = async (req, res) => {
             last_name
           )
         ),
-        studentID,
         students:students (
-            id,
-            student_no,
-            first_name,
-            middle_name,
-            last_name,
-            course
+          id,
+          student_no,
+          first_name,
+          middle_name,
+          last_name,
+          course
         ),
         payment:payment (
           payment_id,
@@ -78,33 +83,49 @@ const getAllBillings = async (req, res) => {
       `)
       .order("created_at", { ascending: false });
 
-    if (error)
+    if (error) {
       return res.status(400).json({
         status: "error",
         message: error.message,
       });
-    // Format data
+    }
+
+    // 🧩 Format data properly
     const formatted = data.map((item) => ({
       billing_id: item.billing_id,
       student_id: item.student_id,
-      students: item.students,
       studentID: item.studentID,
+      students: item.students,
+      studentEnrollment: item.studentEnrollment,
       student_name: item.studentEnrollment?.students
         ? `${item.studentEnrollment.students.last_name}, ${item.studentEnrollment.students.first_name} ${
             item.studentEnrollment.students.middle_name || ""
           }`
+        : item.students
+        ? `${item.students.last_name}, ${item.students.first_name}`
         : "N/A",
-      student_no: item.studentEnrollment?.students?.student_no || "N/A",
-      course: item.studentEnrollment?.current_course || "N/A",
+      student_no:
+        item.studentEnrollment?.students?.student_no ||
+        item.students?.student_no ||
+        "N/A",
+      course:
+        item.studentEnrollment?.current_course ||
+        item.students?.course ||
+        "N/A",
       year_level: item.studentEnrollment?.current_year_level || "N/A",
       school_year: item.school_year || "N/A",
       semester: item.semester || "N/A",
-      total_misc: item.total_misc,
-      previouse_balance: item.previouse_balance,
-      subsidized_by_school: item.subsidized_by_school,
-      total_bill: item.total_bill,
-      full_payment: item.full_payment,
-      current_bill: item.current_bill,
+      total_misc: item.total_misc ?? 0,
+      total_misc_other_fee: item.total_misc_other_fee ?? 0,
+      previouse_balance: item.previouse_balance ?? 0,
+      subsidized_by_school: item.subsidized_by_school ?? 0,
+      total_bill: item.total_bill ?? 0,
+      current_bill: item.current_bill ?? 0,
+      full_payment: item.full_payment ?? 0,
+      total_payment: item.total_payment ?? 0,
+      total_unit: item.total_unit ?? 0,
+      tuition_fee: item.tuition_fee ?? 0,
+      scholarship_status: item.scholarship_status || "None",
       payments: item.payment || [],
       created_at: item.created_at,
     }));
@@ -124,10 +145,72 @@ const getAllBillings = async (req, res) => {
 };
 
 // 🧾 Get billing by student ID (with payments)
+// const getBillingByStudentId = async (req, res) => {
+//   try {
+//     const { student_id } = req.params;
+//     const { data, error } = await supabase
+//       .from("billing")
+//       .select(`
+//         billing_id,
+//         student_id,
+//         total_misc,
+//         previouse_balance,
+//         subsidized_by_school,
+//         total_bill,
+//         full_payment,
+//         created_at,
+//         payment:payment (
+//           payment_id,
+//           payment_date,
+//           amount_paid,
+//           reference_no
+//         ),
+//         studentEnrollment:studentEnrollment (
+//           id,
+//           current_course,
+//           current_year_level,
+//           students:students (
+//             id,
+//             student_no,
+//             first_name,
+//             middle_name,
+//             last_name
+//           )
+//         )
+//       `)
+//       .eq("student_id", student_id)
+//       .order("created_at", { ascending: false });
+
+//     if (error)
+//       return res.status(400).json({
+//         status: "error",
+//         message: error.message,
+//       });
+
+//     if (!data || data.length === 0)
+//       return res.status(404).json({
+//         status: false,
+//         message: "No billing records found for this student",
+//       });
+
+//     res.status(200).json({
+//       status: true,
+//       message: "Billing records fetched successfully",
+//       data,
+//     });
+//   } catch (err) {
+//     console.error("❌ Error fetching billing by student ID:", err.message);
+//     res.status(500).json({
+//       status: "error",
+//       message: "Internal server error",
+//     });
+//   }
+// };
 const getBillingByStudentId = async (req, res) => {
   try {
     const { student_id } = req.params;
 
+    // Fetch all billing records for the student
     const { data, error } = await supabase
       .from("billing")
       .select(`
@@ -138,6 +221,7 @@ const getBillingByStudentId = async (req, res) => {
         subsidized_by_school,
         total_bill,
         full_payment,
+        current_bill,
         created_at,
         payment:payment (
           payment_id,
@@ -158,25 +242,44 @@ const getBillingByStudentId = async (req, res) => {
           )
         )
       `)
-      .eq("student_id", student_id)
+      .eq("studentID", student_id)
       .order("created_at", { ascending: false });
 
-    if (error)
+    if (error) {
       return res.status(400).json({
         status: "error",
         message: error.message,
       });
+    }
 
-    if (!data || data.length === 0)
-      return res.status(404).json({
+    if (!data || data.length === 0) {
+      return res.status(200).json({
         status: false,
         message: "No billing records found for this student",
       });
+    }
+
+    // ✅ Compute total of all current_bill values
+    const totalCurrentBill = data.reduce((sum, item) => {
+      return sum + (item.current_bill || 0);
+    }, 0);
+
+    // ✅ Optionally compute total payments made
+    const totalPayments = data.reduce((sum, item) => {
+      if (item.payment && item.payment.length > 0) {
+        const paymentSum = item.payment.reduce((pSum, p) => pSum + (p.amount_paid || 0), 0);
+        return sum + paymentSum;
+      }
+      return sum;
+    }, 0);
 
     res.status(200).json({
       status: true,
       message: "Billing records fetched successfully",
-      data,
+      data: {totalCurrentBill,
+      totalPayments,
+      count: data.length,
+      data}
     });
   } catch (err) {
     console.error("❌ Error fetching billing by student ID:", err.message);
@@ -186,7 +289,6 @@ const getBillingByStudentId = async (req, res) => {
     });
   }
 };
-
 // 💳 Get all payments
 const getAllPayments = async (req, res) => {
   try {
@@ -231,17 +333,22 @@ const getAllPayments = async (req, res) => {
 const addBilling = async (req, res) => {
   try {
     const {
-      student_id,
+      studentID,
+      semester,
+      school_year,
+      scholarship_status,
+      total_unit,
+      tuition_fee,
       total_misc,
+      total_misc_other_fee,
       previouse_balance,
       subsidized_by_school,
       full_payment,
-      semester,
-      school_year
+      total_bill
     } = req.body;
 
     // Validate required field
-    if (!student_id || total_misc === undefined) {
+    if (!studentID || full_payment === undefined) {
       return res.status(400).json({
         status: "error",
         message: "student_id and full_payment are required.",
@@ -253,13 +360,18 @@ const addBilling = async (req, res) => {
       .from("billing")
       .insert([
         {
-          studentID: student_id,
+          studentID,
+          semester,
+          school_year,
+          scholarship_status,
+          total_unit,
+          tuition_fee,
           total_misc,
+          total_misc_other_fee,
           previouse_balance,
           subsidized_by_school,
           full_payment,
-          semester,
-          school_year,
+          total_bill,
           current_bill: full_payment
         },
       ])
@@ -294,10 +406,10 @@ const addBilling = async (req, res) => {
         - Name: ${name}
         - Semester: ${semester}
         - School Year: ${school_year}
-        - Total Miscellaneous Fees: ₱${total_misc.toFixed(2)}
-        - Subsidized by School: ₱${subsidized_by_school.toFixed(2)}
-        - Total Bill: ₱${full_payment.toFixed(2)}
-        - Current Balance: ₱${full_payment.toFixed(2)}
+        - Previouse Balance: ${previouse_balance}
+        - Total Miscellaneous Fees: ₱${total_misc_other_fee}
+        - Total Bill: ₱${full_payment}
+        - Current Balance: ₱${total_bill}
 
         Please ensure that any remaining balance is settled promptly to avoid any disruption to your child’s enrollment.
 
@@ -309,7 +421,7 @@ const addBilling = async (req, res) => {
         MIT Web-based Portal System`;
 
 
-    await sendEmail(receiverEmail, subject, content);
+    await sendEmail(receiverEmail1, subject, content);
     res.status(201).json({
       status: true,
       message: "Billing record added successfully.",
@@ -420,13 +532,17 @@ const updateBilling = async (req, res) => {
   try {
     const { billing_id } = req.params; // billing_id from URL parameter
     const {
+      semester,
+      school_year,
+      scholarship_status,
+      total_unit,
+      tuition_fee,
       total_misc,
+      total_misc_other_fee,
       previouse_balance,
       subsidized_by_school,
       full_payment,
-      semester,
-      school_year,
-      current_bill,
+      total_bill
     } = req.body;
 
     // Validate billing_id
@@ -437,22 +553,22 @@ const updateBilling = async (req, res) => {
       });
     }
 
-    // Prepare fields to update
-    const fieldsToUpdate = {};
-    if (total_misc !== undefined) fieldsToUpdate.total_misc = total_misc;
-    if (previouse_balance !== undefined)
-      fieldsToUpdate.previouse_balance = previouse_balance;
-    if (subsidized_by_school !== undefined)
-      fieldsToUpdate.subsidized_by_school = subsidized_by_school;
-    if (full_payment !== undefined) fieldsToUpdate.full_payment = full_payment;
-    if (semester !== undefined) fieldsToUpdate.semester = semester;
-    if (school_year !== undefined) fieldsToUpdate.school_year = school_year;
-    if (current_bill !== undefined) fieldsToUpdate.current_bill = current_bill;
-
     // Update record in Supabase
     const { data, error } = await supabase
       .from("billing")
-      .update(fieldsToUpdate)
+      .update({
+      semester,
+      school_year,
+      scholarship_status,
+      total_unit,
+      tuition_fee,
+      total_misc,
+      total_misc_other_fee,
+      previouse_balance,
+      subsidized_by_school,
+      full_payment,
+      total_bill
+      })
       .eq("billing_id", billing_id)
       .select()
       .single();

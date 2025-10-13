@@ -387,10 +387,332 @@ const getStudentGradesByStudentId = async (req, res) => {
   }
 };
 
+// const getStudentGradeEvaluation = async (req, res) => {
+//   try {
+//     const { student_id } = req.params;
+
+//     if (!student_id) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Student ID is required",
+//       });
+//     }
+
+//     const { data, error } = await supabase
+//       .from("student_grade")
+//       .select(`
+//         id,
+//         premid,
+//         midterm,
+//         prefinal,
+//         finalterm,
+//         updated_at,
+//         studentEnrollment:studentEnrollment (
+//           id,
+//           current_course,
+//           current_year_level,
+//           current_semester,
+//           current_school_year,
+//           students:students (
+//             id,
+//             student_no,
+//             first_name,
+//             middle_name,
+//             last_name,
+//             student_email,
+//             course,
+//             year_level
+//           )
+//         ),
+//         schedule:schedule (
+//           schedule_id,
+//           subject_code,
+//           desc_title,
+//           units,
+//           time,
+//           day,
+//           room,
+//           course,
+//           school_year,
+//           semester,
+//           section,
+//           year_level
+//         )
+//       `)
+//       .eq("studentEnrollment.students.id", student_id);
+
+//     if (error) throw error;
+
+//     if (!data || data.length === 0) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "No grade records found for this student",
+//       });
+//     }
+
+//     // ✅ Sort records by School Year → Semester
+//     data.sort((a, b) => {
+//       const syA = a.schedule?.school_year || "";
+//       const syB = b.schedule?.school_year || "";
+//       const semA = a.schedule?.semester || "";
+//       const semB = b.schedule?.semester || "";
+
+//       if (syA < syB) return -1;
+//       if (syA > syB) return 1;
+
+//       const semOrder = { "1st Semester": 1, "2nd Semester": 2, "Summer": 3 };
+//       return (semOrder[semA] || 99) - (semOrder[semB] || 99);
+//     });
+
+//     // ✅ Group results by school year + semester
+//     const grouped = {};
+//     data.forEach((item) => {
+//       const sy = item.schedule?.school_year || "Unknown SY";
+//       const sem = item.schedule?.semester || "Unknown Semester";
+//       const key = `${sy} - ${sem}`;
+
+//       if (!grouped[key]) {
+//         grouped[key] = {
+//           school_year: sy,
+//           semester: sem,
+//           subjects: [],
+//         };
+//       }
+
+//       grouped[key].subjects.push({
+//         subject_code: item.schedule?.subject_code || "N/A",
+//         desc_title: item.schedule?.desc_title || "N/A",
+//         units: item.schedule?.units || "N/A",
+//         premid: item.premid ?? null,
+//         midterm: item.midterm ?? null,
+//         prefinal: item.prefinal ?? null,
+//         finalterm: item.finalterm ?? null,
+//       });
+//     });
+
+//     // ✅ Safely find student info
+//     const firstRecordWithStudent = data.find(
+//       (item) => item.studentEnrollment?.students
+//     );
+
+//     if (!firstRecordWithStudent) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "No student data found for this record",
+//       });
+//     }
+
+//     const studentInfo = firstRecordWithStudent.studentEnrollment.students;
+
+//     res.status(200).json({
+//       status: true,
+//       message: "Grade evaluation retrieved successfully",
+//       data: {
+//         student: {
+//           id: studentInfo.id,
+//           name: `${studentInfo.last_name}, ${studentInfo.first_name} ${studentInfo.middle_name || ""}`.trim(),
+//           student_no: studentInfo.student_no,
+//           course: studentInfo.course,
+//           year_level: studentInfo.year_level,
+//           email: studentInfo.student_email,
+//         },
+//         evaluation: Object.values(grouped),
+//       },
+//     });
+//   } catch (err) {
+//     console.error("❌ Error fetching student grade evaluation:", err.message);
+//     res.status(500).json({
+//       status: "error",
+//       message: "Internal Server Error",
+//     });
+//   }
+// };
+
+const getStudentGradeEvaluation = async (req, res) => {
+  try {
+    const { student_id } = req.params; // From "students" table
+
+    if (!student_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "Student ID is required",
+      });
+    }
+
+    // ✅ Step 1: Check if student exists
+    const { data: student, error: studentErr } = await supabase
+      .from("students")
+      .select("id, student_no, first_name, middle_name, last_name, student_email, course, year_level")
+      .eq("id", student_id)
+      .single();
+
+    if (studentErr || !student) {
+      return res.status(404).json({
+        status: false,
+        message: "Student not found",
+      });
+    }
+
+    // ✅ Step 2: Get all enrollment IDs linked to this student
+    const { data: enrollments, error: enrollErr } = await supabase
+      .from("studentEnrollment")
+      .select("id, current_course, current_year_level, current_semester, current_school_year")
+      .eq("student_id", student_id);
+
+    if (enrollErr) throw enrollErr;
+
+    if (!enrollments || enrollments.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No enrollment records found for this student",
+      });
+    }
+
+    const enrollmentIds = enrollments.map((e) => e.id);
+
+    // ✅ Step 3: Get all grades tied to those enrollments with schedule
+    const { data: grades, error: gradeErr } = await supabase
+      .from("student_grade")
+      .select(`
+        id,
+        premid,
+        midterm,
+        prefinal,
+        finalterm,
+        updated_at,
+        studentEnrollment:studentEnrollment (
+          id,
+          current_course,
+          current_year_level,
+          current_semester,
+          current_school_year
+        ),
+        schedule:schedule (
+          schedule_id,
+          subject_code,
+          desc_title,
+          units,
+          time,
+          day,
+          room,
+          course,
+          school_year,
+          semester,
+          section,
+          year_level
+        )
+      `)
+      .in("studentEnrollment.id", enrollmentIds);
+
+    if (gradeErr) throw gradeErr;
+
+    if (!grades || grades.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No grade records found for this student",
+      });
+    }
+
+    // ✅ Step 4: Sort and group by School Year → Semester
+    grades.sort((a, b) => {
+      const syA = a.schedule?.school_year || "";
+      const syB = b.schedule?.school_year || "";
+      const semA = a.schedule?.semester || "";
+      const semB = b.schedule?.semester || "";
+
+      if (syA < syB) return -1;
+      if (syA > syB) return 1;
+
+      const semOrder = { "1st Semester": 1, "2nd Semester": 2, "Summer": 3 };
+      return (semOrder[semA] || 99) - (semOrder[semB] || 99);
+    });
+
+    const grouped = {};
+
+    grades.forEach((item) => {
+      const sy = item.schedule?.school_year || "Unknown SY";
+      const sem = item.schedule?.semester || "Unknown Semester";
+      const key = `${sy} - ${sem}`;
+
+      if (!grouped[key]) {
+        grouped[key] = {
+          school_year: sy,
+          semester: sem,
+          subjects: [],
+          totalUnits: 0,
+          average: 0,
+        };
+      }
+
+      const premid = parseFloat(item.premid) || 0;
+      const midterm = parseFloat(item.midterm) || 0;
+      const prefinal = parseFloat(item.prefinal) || 0;
+      const finalterm = parseFloat(item.finalterm) || 0;
+
+      // ✅ Compute subject average (ignore 0 grades)
+      const gradesArray = [premid, midterm, prefinal, finalterm].filter((g) => g > 0);
+      const subjectAverage =
+        gradesArray.length > 0
+          ? gradesArray.reduce((a, b) => a + b, 0) / gradesArray.length
+          : 0;
+
+      const units = parseFloat(item.schedule?.units) || 0;
+
+      grouped[key].subjects.push({
+        subject_code: item.schedule?.subject_code || "N/A",
+        desc_title: item.schedule?.desc_title || "N/A",
+        units: units,
+        premid: item.premid ?? "-",
+        midterm: item.midterm ?? "-",
+        prefinal: item.prefinal ?? "-",
+        finalterm: item.finalterm ?? "-",
+        subjectAverage: subjectAverage ? subjectAverage.toFixed(2) : "-",
+      });
+
+      // ✅ Add to semester totals
+      grouped[key].totalUnits += units;
+    });
+
+    // ✅ Step 5: Compute average grade per semester
+    Object.values(grouped).forEach((g) => {
+      const totalGrades = g.subjects
+        .map((s) => parseFloat(s.subjectAverage))
+        .filter((v) => !isNaN(v) && v > 0);
+      const total = totalGrades.reduce((a, b) => a + b, 0);
+      g.average = totalGrades.length > 0 ? (total / totalGrades.length).toFixed(2) : "-";
+    });
+
+    // ✅ Step 6: Return response
+    res.status(200).json({
+      status: true,
+      message: "Student grade evaluation retrieved successfully",
+      data: {
+        student: {
+          id: student.id,
+          name: `${student.last_name}, ${student.first_name} ${student.middle_name || ""}`.trim(),
+          student_no: student.student_no,
+          course: student.course,
+          year_level: student.year_level,
+          email: student.student_email,
+        },
+        evaluation: Object.values(grouped),
+      },
+    });
+  } catch (err) {
+    console.error("❌ Error fetching student grade evaluation:", err.message);
+    res.status(500).json({
+      status: "error",
+      message: "Internal Server Error",
+    });
+  }
+};
+
+
 module.exports = {
   addStudentGrade,
   getStudentGrades,
   getStudentGradesBySchedule,
   updateStudentGrade,
-  getStudentGradesByStudentId
+  getStudentGradesByStudentId,
+  getStudentGradeEvaluation
 };

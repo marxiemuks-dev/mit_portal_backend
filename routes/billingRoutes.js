@@ -15,4 +15,5 @@ module.exports = function(app){
   app.get('/api/auth/billing', billingController.getAllBillings);
   app.post('/api/auth/payment', billingController.addPayment);
   app.put('/api/auth/billing/:billing_id', billingController.updateBilling);
+  app.get('/api/auth/billing/student/:student_id', billingController.getBillingByStudentId);
 }
