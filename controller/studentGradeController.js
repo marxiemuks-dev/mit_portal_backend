@@ -387,147 +387,6 @@ const getStudentGradesByStudentId = async (req, res) => {
   }
 };
 
-// const getStudentGradeEvaluation = async (req, res) => {
-//   try {
-//     const { student_id } = req.params;
-
-//     if (!student_id) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "Student ID is required",
-//       });
-//     }
-
-//     const { data, error } = await supabase
-//       .from("student_grade")
-//       .select(`
-//         id,
-//         premid,
-//         midterm,
-//         prefinal,
-//         finalterm,
-//         updated_at,
-//         studentEnrollment:studentEnrollment (
-//           id,
-//           current_course,
-//           current_year_level,
-//           current_semester,
-//           current_school_year,
-//           students:students (
-//             id,
-//             student_no,
-//             first_name,
-//             middle_name,
-//             last_name,
-//             student_email,
-//             course,
-//             year_level
-//           )
-//         ),
-//         schedule:schedule (
-//           schedule_id,
-//           subject_code,
-//           desc_title,
-//           units,
-//           time,
-//           day,
-//           room,
-//           course,
-//           school_year,
-//           semester,
-//           section,
-//           year_level
-//         )
-//       `)
-//       .eq("studentEnrollment.students.id", student_id);
-
-//     if (error) throw error;
-
-//     if (!data || data.length === 0) {
-//       return res.status(404).json({
-//         status: false,
-//         message: "No grade records found for this student",
-//       });
-//     }
-
-//     // ✅ Sort records by School Year → Semester
-//     data.sort((a, b) => {
-//       const syA = a.schedule?.school_year || "";
-//       const syB = b.schedule?.school_year || "";
-//       const semA = a.schedule?.semester || "";
-//       const semB = b.schedule?.semester || "";
-
-//       if (syA < syB) return -1;
-//       if (syA > syB) return 1;
-
-//       const semOrder = { "1st Semester": 1, "2nd Semester": 2, "Summer": 3 };
-//       return (semOrder[semA] || 99) - (semOrder[semB] || 99);
-//     });
-
-//     // ✅ Group results by school year + semester
-//     const grouped = {};
-//     data.forEach((item) => {
-//       const sy = item.schedule?.school_year || "Unknown SY";
-//       const sem = item.schedule?.semester || "Unknown Semester";
-//       const key = `${sy} - ${sem}`;
-
-//       if (!grouped[key]) {
-//         grouped[key] = {
-//           school_year: sy,
-//           semester: sem,
-//           subjects: [],
-//         };
-//       }
-
-//       grouped[key].subjects.push({
-//         subject_code: item.schedule?.subject_code || "N/A",
-//         desc_title: item.schedule?.desc_title || "N/A",
-//         units: item.schedule?.units || "N/A",
-//         premid: item.premid ?? null,
-//         midterm: item.midterm ?? null,
-//         prefinal: item.prefinal ?? null,
-//         finalterm: item.finalterm ?? null,
-//       });
-//     });
-
-//     // ✅ Safely find student info
-//     const firstRecordWithStudent = data.find(
-//       (item) => item.studentEnrollment?.students
-//     );
-
-//     if (!firstRecordWithStudent) {
-//       return res.status(404).json({
-//         status: false,
-//         message: "No student data found for this record",
-//       });
-//     }
-
-//     const studentInfo = firstRecordWithStudent.studentEnrollment.students;
-
-//     res.status(200).json({
-//       status: true,
-//       message: "Grade evaluation retrieved successfully",
-//       data: {
-//         student: {
-//           id: studentInfo.id,
-//           name: `${studentInfo.last_name}, ${studentInfo.first_name} ${studentInfo.middle_name || ""}`.trim(),
-//           student_no: studentInfo.student_no,
-//           course: studentInfo.course,
-//           year_level: studentInfo.year_level,
-//           email: studentInfo.student_email,
-//         },
-//         evaluation: Object.values(grouped),
-//       },
-//     });
-//   } catch (err) {
-//     console.error("❌ Error fetching student grade evaluation:", err.message);
-//     res.status(500).json({
-//       status: "error",
-//       message: "Internal Server Error",
-//     });
-//   }
-// };
-
 const getStudentGradeEvaluation = async (req, res) => {
   try {
     const { student_id } = req.params; // From "students" table
@@ -707,6 +566,125 @@ const getStudentGradeEvaluation = async (req, res) => {
   }
 };
 
+const getGradeForEverySchedule = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("student_grade")
+      .select(`
+        id,
+        created_at,
+        premid,
+        midterm,
+        prefinal,
+        finalterm,
+        studentEnrollment:studentEnrollment (
+          id,
+          current_course,
+          current_year_level,
+          students:students (
+            id,
+            student_no,
+            first_name,
+            middle_name,
+            last_name
+          )
+        ),
+        schedule:schedule (
+          schedule_id,
+          subject_code,
+          desc_title,
+          units,
+          course,
+          semester,
+          school_year,
+          time,
+          day,
+          room
+        )
+      `)
+      .order("created_at", { ascending: true });
+
+    if (error) throw error;
+
+    // ✅ Step 1: Format each grade record
+    const formattedData = data.map((item) => {
+      const student = item.studentEnrollment?.students;
+      const schedule = item.schedule;
+
+      return {
+        id: item.id,
+        student_id: student?.id || null,
+        student_enrollment_id: item.studentEnrollment?.id || null,
+        student_no: student?.student_no || "N/A",
+        student_name: student
+          ? `${student.first_name} ${
+              student.middle_name ? student.middle_name + " " : ""
+            }${student.last_name}`
+          : "N/A",
+        course: item.studentEnrollment?.current_course || "N/A",
+        year_level: item.studentEnrollment?.current_year_level || "N/A",
+        subject_code: schedule?.subject_code || "N/A",
+        desc_title: schedule?.desc_title || "N/A",
+        semester: schedule?.semester || "N/A",
+        school_year: schedule?.school_year || "N/A",
+        units: schedule?.units || null,
+        premid: item.premid,
+        midterm: item.midterm,
+        prefinal: item.prefinal,
+        finalterm: item.finalterm,
+      };
+    });
+
+    // ✅ Step 2: Group by student_id
+    const groupedData = formattedData.reduce((acc, grade) => {
+      const studentId = grade.student_id;
+
+      if (!acc[studentId]) {
+        acc[studentId] = {
+          student_id: grade.student_id,
+          student_no: grade.student_no,
+          student_name: grade.student_name,
+          course: grade.course,
+          year_level: grade.year_level,
+          subjects: [],
+        };
+      }
+
+      acc[studentId].subjects.push({
+        subject_code: grade.subject_code,
+        desc_title: grade.desc_title,
+        semester: grade.semester,
+        school_year: grade.school_year,
+        units: grade.units,
+        premid: grade.premid,
+        midterm: grade.midterm,
+        prefinal: grade.prefinal,
+        finalterm: grade.finalterm,
+      });
+
+      return acc;
+    }, {});
+
+    // ✅ Step 3: Sort grouped results by name or year level
+    const result = Object.values(groupedData).sort((a, b) =>
+      a.student_name.localeCompare(b.student_name)
+    );
+
+    res.status(200).json({
+      status: "success",
+      message: "Fetched all student grades successfully (grouped by student)",
+      data: result,
+    });
+  } catch (err) {
+    console.error("❌ Error fetching student grades:", err.message);
+    res.status(500).json({
+      status: "error",
+      message: "Internal Server Error",
+      data: [],
+    });
+  }
+};
+
 
 module.exports = {
   addStudentGrade,
@@ -714,5 +692,6 @@ module.exports = {
   getStudentGradesBySchedule,
   updateStudentGrade,
   getStudentGradesByStudentId,
-  getStudentGradeEvaluation
+  getStudentGradeEvaluation,
+  getGradeForEverySchedule
 };

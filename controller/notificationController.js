@@ -61,13 +61,7 @@ const getNotifications = async (req, res) => {
         target_type,
         target_user_id,
         is_read,
-        created_at,
-        users (
-          id,
-          first_name,
-          middle_name,
-          last_name
-        )
+        created_at
       `
       )
       .order("created_at", { ascending: false });

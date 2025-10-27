@@ -371,8 +371,6 @@ const getEnrollmentById = async (req, res) => {
       `)
       .eq("student_id", student_id)     // Filter by student ID
       .order("created_at", { ascending: false }) // Latest first
-      .limit(1)                          // Only one record
-      .maybeSingle();                         // Return as single object
 
     if (error) {
       return res.status(400).json({

@@ -392,7 +392,6 @@ const addBilling = async (req, res) => {
         message: error.message,
       });
     }
-    console.log(data)
 
     const receiverEmail = data.students.student_email;
     const receiverEmail1 = data.students.guardian_email;
@@ -420,8 +419,38 @@ const addBilling = async (req, res) => {
         Sincerely,  
         MIT Web-based Portal System`;
 
+      const { data: notifData, error: notifError } = await supabase
+      .from("notification")
+      .insert([
+        {
+          title : "Billing Notification",
+          message:`Dear Student,
+                  We would like to inform you about your billing details for the current semester and school year.
+                  Billing Details:
+                  - Name: ${name}
+                  - Semester: ${semester}
+                  - School Year: ${school_year}
+                  - Previouse Balance: ${previouse_balance}
+                  - Total Miscellaneous Fees: ₱${total_misc_other_fee}
+                  - Total Bill: ₱${full_payment}
+                  - Current Balance: ₱${total_bill}
 
-    await sendEmail(receiverEmail1, subject, content);
+                  Please ensure that any remaining balance is settled promptly to avoid any disruption to your enrollment.
+
+                  If you have any questions regarding this billing statement or require further assistance, do not hesitate to contact our office.
+
+                  Thank you for your prompt attention and cooperation.`,
+          target_type: 'STUDENT',
+          target_user_id: studentID || null,
+          is_read: false,
+        },
+      ])
+      .select("*");
+
+      if (notifError) throw notifError;
+  
+   await sendEmail(receiverEmail1, subject, content);
+
     res.status(201).json({
       status: true,
       message: "Billing record added successfully.",

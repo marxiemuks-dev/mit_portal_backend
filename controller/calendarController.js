@@ -234,7 +234,7 @@ const addCalendarEvent = async (req, res) => {
     const event = data[0];
 
     // ✅ Email to all students if visibility is "Public" or "Student"
-    if (visibility === "Public" || visibility === "Student") {
+    if (visibility === "ALL" || visibility === "STUDENT") {
       const { data: students, error: studentError } = await supabase
         .from("students")
         .select("student_email, first_name, last_name")
@@ -243,24 +243,23 @@ const addCalendarEvent = async (req, res) => {
       if (studentError) throw studentError;
 
       if (students && students.length > 0) {
-        console.log(`📢 Sending event email to ${students.length} students...`);
 
         const subject = `New School Event: ${title}`;
         const message = `
-Dear Student,
+          Dear Student,
 
-You are updated for a new school event!
+          You are updated for a new school event!
 
-📅 Event: ${title}
-📝 Description: ${description || "No description provided."}
-📚 Type: ${event_type}
-📆 Date: ${start_date}${end_date ? ` - ${end_date}` : ""}
-🎓 School Year: ${school_year}
-🏫 Semester: ${semester}
+          📅 Event: ${title}
+          📝 Description: ${description || "No description provided."}
+          📚 Type: ${event_type}
+          📆 Date: ${start_date}${end_date ? ` - ${end_date}` : ""}
+          🎓 School Year: ${school_year}
+          🏫 Semester: ${semester}
 
-Thank you,
-MIT Portal System
-`;
+          Thank you,
+          MIT Portal System
+          `;
 
         // Send emails asynchronously (in sequence)
         for (const student of students) {
@@ -270,26 +269,18 @@ MIT Portal System
         }
       }
     }
-
     // ✅ Insert notification if visibility is Public / Faculty / Admin Only
-    if (["Public", "Faculty", "Admin Only"].includes(visibility)) {
+    if (["ALL", "FACULTY", "STUDENT", "ADMIN", "REGISTRAR", "CASHIER"].includes(visibility)) {
       const message = `New calendar event: ${title} - ${event_type}`;
-      const target_type =
-        visibility === "Public"
-          ? "ALL"
-          : visibility === "Faculty"
-          ? "FACULTY"
-          : "ADMIN";
-
       const { data: notifData, error: notifError } = await supabase
-        .from("notification")
+        .from("announcement")
         .insert([
           {
             title,
-            message,
-            target_type, // 'ALL', 'FACULTY', 'ADMIN'
-            target_user_id: null,
-            is_read: false,
+            description: message,
+            visibility: visibility, // 'ALL', 'FACULTY', 'ADMIN'
+            targetUser: null,
+            isRead: false,
           },
         ])
         .select("*");
