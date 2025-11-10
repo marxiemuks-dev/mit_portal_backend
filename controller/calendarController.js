@@ -217,10 +217,9 @@ const addCalendarEvent = async (req, res) => {
       .insert([
         {
           title,
-          description,
+          description ,
           event_type,
           start_date,
-          end_date,
           semester,
           school_year,
           status,

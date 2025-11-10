@@ -3,9 +3,51 @@ const supabase = require("../config/supabaseClient");
 /**
  * 🟢 Add an announcement
  */
+// const addAnnouncement = async (req, res) => {
+//   try {
+//     const { title, description, isRead, targetUser, visibility,category, image } = req.body;
+
+//     if (!title || !description) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Required fields (title, description) are missing",
+//       });
+//     }
+
+//     const { data, error } = await supabase
+//       .from("announcement")
+//       .insert([
+//         {
+//           title,
+//           description,
+//           isRead: isRead || false,
+//           targetUser: targetUser || null,
+//           visibility: visibility || "ALL",
+//           type: category,
+//           photo_url: image || null
+//         },
+//       ])
+//       .select("*");
+
+//     if (error) throw error;
+
+//     res.status(201).json({
+//       status: "success",
+//       message: "Announcement added successfully",
+//       data: data[0],
+//     });
+//   } catch (err) {
+//     console.error("Error adding announcement:", err.message);
+//     res.status(500).json({
+//       status: "error",
+//       message: "Internal Server Error",
+//     });
+//   }
+// };
 const addAnnouncement = async (req, res) => {
   try {
-    const { title, description, isRead, targetUser, visibility } = req.body;
+    const { title, description, isRead, targetUser, visibility, category } = req.body;
+    const file = req.file; // Image uploaded via multer
 
     // ✅ Validation
     if (!title || !description) {
@@ -15,6 +57,14 @@ const addAnnouncement = async (req, res) => {
       });
     }
 
+    // ✅ Get image URL (from local storage path)
+    let imageUrl = null;
+    if (file) {
+      // Assuming "public" is your static root (e.g., app.use('/public', express.static('public')))
+      imageUrl = `assets/${file.filename}`;
+    }
+
+    // ✅ Insert record into database
     const { data, error } = await supabase
       .from("announcement")
       .insert([
@@ -23,7 +73,9 @@ const addAnnouncement = async (req, res) => {
           description,
           isRead: isRead || false,
           targetUser: targetUser || null,
-          visibility: visibility || "ALL", // e.g. ALL, ADMIN, FACULTY, STUDENT
+          visibility: visibility || "ALL",
+          type: category || "Announcement", // e.g., "Announcement" or "Activity"
+          photo_url: imageUrl,
         },
       ])
       .select("*");
@@ -40,10 +92,10 @@ const addAnnouncement = async (req, res) => {
     res.status(500).json({
       status: "error",
       message: "Internal Server Error",
+      details: err.message,
     });
   }
 };
-
 /**
  * 📦 Get all announcements (optionally filtered by target user)
  */
@@ -62,6 +114,8 @@ const getAnnouncements = async (req, res) => {
         targetUser,
         visibility,
         created_at,
+        photo_url,
+        type,
         users (
           id,
           first_name,
@@ -175,8 +229,9 @@ const deleteAnnouncement = async (req, res) => {
 const updateAnnouncement = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, isRead, targetUser, visibility } = req.body;
-
+    const { title, description, isRead, targetUser, visibility,category } = req.body;
+    const file = req.file; // Image uploaded via multer
+    
     if (!id) {
       return res.status(400).json({
         status: "error",
@@ -184,12 +239,11 @@ const updateAnnouncement = async (req, res) => {
       });
     }
 
-    const updateData = {};
-    if (title !== undefined) updateData.title = title;
-    if (description !== undefined) updateData.description = description;
-    if (isRead !== undefined) updateData.isRead = isRead;
-    if (targetUser !== undefined) updateData.targetUser = targetUser;
-    if (visibility !== undefined) updateData.visibility = visibility;
+    let imageUrl = null;
+    if (file) {
+      // Assuming "public" is your static root (e.g., app.use('/public', express.static('public')))
+      imageUrl = `assets/${file.filename}`;
+    }
 
     const { data, error } = await supabase
       .from("announcement")
@@ -199,6 +253,8 @@ const updateAnnouncement = async (req, res) => {
           isRead: isRead || false,
           targetUser: targetUser || null,
           visibility: visibility || "ALL", // e.g. ALL, ADMIN, FACULTY, STUDENT
+          type: category || "Announcement", // e.g., "Announcement" or "Activity"
+          photo_url: imageUrl,
       })
       .eq("id", id)
       .select("*");

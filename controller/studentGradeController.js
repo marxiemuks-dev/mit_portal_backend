@@ -214,9 +214,9 @@ const getStudentGradesBySchedule = async (req, res) => {
 const updateStudentGrade = async (req, res) => {
   try {
     const { id } = req.params;
-    const {premid,midterm,prefinal,finalterm } = req.body;
+    let { premid, midterm, prefinal, finalterm } = req.body;
 
-    // ✅ Validate requiredd fields
+    // ✅ Validate required fields
     if (!id) {
       return res.status(400).json({
         status: "error",
@@ -224,16 +224,22 @@ const updateStudentGrade = async (req, res) => {
       });
     }
 
-    // ⚠️ Optional: validate numeric values
+    // ⚠️ Ensure that undefined or empty values are set to 0
+    premid = premid === undefined || premid === "" ? 0 : parseFloat(premid);
+    midterm = midterm === undefined || midterm === "" ? 0 : parseFloat(midterm);
+    prefinal = prefinal === undefined || prefinal === "" ? 0 : parseFloat(prefinal);
+    finalterm = finalterm === undefined || finalterm === "" ? 0 : parseFloat(finalterm);
+
+    // ⚠️ Optional: validate that the values are numbers after the check
     if (
-      (premid !== undefined && isNaN(premid)) ||
-      (midterm !== undefined && isNaN(midterm)) ||
-      (prefinal !== undefined && isNaN(prefinal)) ||
-      (finalterm !== undefined && isNaN(finalterm))
+      isNaN(premid) ||
+      isNaN(midterm) ||
+      isNaN(prefinal) ||
+      isNaN(finalterm)
     ) {
       return res.status(400).json({
         status: "error",
-        message: "Prelim, Midterm, and Final must be numbers",
+        message: "Prelim, Midterm, and Final must be valid numbers",
       });
     }
 
@@ -586,7 +592,8 @@ const getGradeForEverySchedule = async (req, res) => {
             student_no,
             first_name,
             middle_name,
-            last_name
+            last_name,
+            student_email
           )
         ),
         schedule:schedule (
@@ -599,7 +606,8 @@ const getGradeForEverySchedule = async (req, res) => {
           school_year,
           time,
           day,
-          room
+          room,
+          year_level
         )
       `)
       .order("created_at", { ascending: true });
@@ -616,6 +624,7 @@ const getGradeForEverySchedule = async (req, res) => {
         student_id: student?.id || null,
         student_enrollment_id: item.studentEnrollment?.id || null,
         student_no: student?.student_no || "N/A",
+        student_email: student?.student_email || "N/A",
         student_name: student
           ? `${student.first_name} ${
               student.middle_name ? student.middle_name + " " : ""
@@ -632,6 +641,7 @@ const getGradeForEverySchedule = async (req, res) => {
         midterm: item.midterm,
         prefinal: item.prefinal,
         finalterm: item.finalterm,
+        subject_year_level: schedule?.year_level || "N/A",
       };
     });
 
@@ -643,9 +653,11 @@ const getGradeForEverySchedule = async (req, res) => {
         acc[studentId] = {
           student_id: grade.student_id,
           student_no: grade.student_no,
+          student_email: grade.student_email,
           student_name: grade.student_name,
           course: grade.course,
           year_level: grade.year_level,
+
           subjects: [],
         };
       }
@@ -660,6 +672,7 @@ const getGradeForEverySchedule = async (req, res) => {
         midterm: grade.midterm,
         prefinal: grade.prefinal,
         finalterm: grade.finalterm,
+        subject_year_level: grade.subject_year_level
       });
 
       return acc;
