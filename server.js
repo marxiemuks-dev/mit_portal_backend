@@ -16,7 +16,7 @@ app.use("/assets", express.static(path.join(__dirname, "public/assets")));
 
 const corsOptions = {
     origin: ["http://127.0.0.1:3000", "http://192.168.1.171:3000", "http://localhost:3000",
-        "https://mit-portal.onrender.com"
+        "https://mit-portal.onrender.com",["https://mit-portal.vercel.app"]
     ], // List of allowed origins
     credentials: true,
 };
